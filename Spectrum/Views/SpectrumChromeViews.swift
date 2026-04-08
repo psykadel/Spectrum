@@ -151,6 +151,8 @@ struct InspectorView: View {
     @Environment(SpectrumStore.self) private var store
     @State private var draftName = ""
     @State private var ownedState = false
+    @State private var editedBSSID: String?
+    @State private var isSyncingEditor = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
@@ -158,7 +160,7 @@ struct InspectorView: View {
                 .font(.system(size: 28, weight: .bold, design: .rounded))
                 .foregroundStyle(.white.opacity(0.95))
 
-            Text("Tracked radios stay visible until you clear the session. Owned radios stay brighter and easier to follow.")
+            Text("Tracked radios stay visible until you clear the session. Label and ownership changes save automatically.")
                 .font(.system(size: 13, weight: .medium, design: .rounded))
                 .foregroundStyle(.white.opacity(0.62))
 
@@ -170,20 +172,17 @@ struct InspectorView: View {
 
                     TextField("Friendly name", text: $draftName)
                         .textFieldStyle(.roundedBorder)
+                        .onChange(of: draftName) { _, _ in
+                            persistEditorChanges()
+                        }
 
                     Toggle("Owned by me", isOn: $ownedState)
                         .toggleStyle(.checkbox)
+                        .onChange(of: ownedState) { _, _ in
+                            persistEditorChanges()
+                        }
 
                     HStack(spacing: 10) {
-                        Button("Save Label") {
-                            store.saveAnnotation(
-                                bssid: selected.bssid,
-                                friendlyName: draftName,
-                                isOwned: ownedState
-                            )
-                        }
-                        .buttonStyle(.glassProminent)
-
                         Button("Ask AI for Label") {
                             store.selectSignal(selected.bssid)
                             Task {
@@ -224,9 +223,6 @@ struct InspectorView: View {
                     syncEditor(with: selected)
                 }
                 .onChange(of: selected.bssid) { _, _ in
-                    syncEditor(with: selected)
-                }
-                .onChange(of: selected.displayName) { _, _ in
                     syncEditor(with: selected)
                 }
             }
@@ -292,7 +288,19 @@ struct InspectorView: View {
     }
 
     private func syncEditor(with signal: RenderedSignalEnvelope) {
+        isSyncingEditor = true
+        editedBSSID = signal.bssid
         draftName = signal.displayName == signal.bssid ? "" : signal.displayName
         ownedState = signal.isOwned
+        isSyncingEditor = false
+    }
+
+    private func persistEditorChanges() {
+        guard !isSyncingEditor, let editedBSSID else { return }
+        store.saveAnnotation(
+            bssid: editedBSSID,
+            friendlyName: draftName,
+            isOwned: ownedState
+        )
     }
 }
