@@ -6,6 +6,7 @@ import SwiftUI
 struct SpectrumApp: App {
     private let modelContainer: ModelContainer
     @State private var store: SpectrumStore
+    @State private var openAISettingsStore: OpenAISettingsStore
 
     init() {
         let schema = Schema([NetworkAnnotation.self])
@@ -16,12 +17,17 @@ struct SpectrumApp: App {
         let scanner = CoreWLANScanner()
         let locationStore = LocationAuthorizationStore()
         let repository = AnnotationRepository(context: container.mainContext)
+        let openAISettingsStore = OpenAISettingsStore()
+        let deviceLabelingService = OpenAIResponsesDeviceLabelingService()
 
         _store = State(initialValue: SpectrumStore(
             scanner: scanner,
             locationStore: locationStore,
-            annotationRepository: repository
+            annotationRepository: repository,
+            openAISettingsStore: openAISettingsStore,
+            deviceLabelingService: deviceLabelingService
         ))
+        _openAISettingsStore = State(initialValue: openAISettingsStore)
 
         if let iconURL = Bundle.main.url(forResource: "AppIcon", withExtension: "icns"),
            let iconImage = NSImage(contentsOf: iconURL)
@@ -35,6 +41,7 @@ struct SpectrumApp: App {
             SpectrumRootView()
                 .frame(minWidth: 876, minHeight: 540)
                 .environment(store)
+                .environment(openAISettingsStore)
                 .modelContainer(modelContainer)
                 .preferredColorScheme(.dark)
                 .background(WindowChromeConfigurator())
@@ -49,6 +56,13 @@ struct SpectrumApp: App {
         .windowStyle(.hiddenTitleBar)
         .commands {
             SpectrumCommands(store: store)
+        }
+
+        Settings {
+            OpenAISettingsView()
+                .environment(openAISettingsStore)
+                .frame(minWidth: 520, minHeight: 260)
+                .preferredColorScheme(.dark)
         }
     }
 }

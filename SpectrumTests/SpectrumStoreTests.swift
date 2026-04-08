@@ -281,4 +281,218 @@ final class SpectrumStoreTests: XCTestCase {
             ]
         )
     }
+
+    func testGenerateAILabelSavesPlainAILabelWhenNoExistingName() async throws {
+        let repository = InMemoryAnnotationRepository()
+        let settingsStore = makeSettingsStore()
+        let labelingService = MockDeviceLabelingService(result: .success("Apple iPhone"))
+        let store = SpectrumStore(
+            scanner: MockWiFiScanner(),
+            locationStore: MockLocationAuthorizationStore(initialState: .authorized),
+            annotationRepository: repository,
+            openAISettingsStore: settingsStore,
+            deviceLabelingService: labelingService,
+            defaults: UserDefaults(suiteName: #function)!,
+            now: Date.init
+        )
+
+        store.applyScanSnapshot(
+            WiFiScanSnapshot(
+                interface: .init(availableInterfaceNames: ["en0"], selectedInterfaceName: "en0", isPoweredOn: true),
+                observations: [
+                    .init(bssid: "AA:BB:CC:DD:EE:FF", ssid: nil, channel: 149, band: .band5, channelWidthMHz: 80, rssi: -51, noise: -93)
+                ],
+                scannedAt: Date()
+            )
+        )
+
+        await store.generateAILabel(for: "AA:BB:CC:DD:EE:FF")
+
+        XCTAssertEqual(store.annotationList.first?.friendlyName, "Apple iPhone")
+    }
+
+    func testGenerateAILabelPreservesSSIDInParentheses() async throws {
+        let repository = InMemoryAnnotationRepository()
+        let settingsStore = makeSettingsStore()
+        let store = SpectrumStore(
+            scanner: MockWiFiScanner(),
+            locationStore: MockLocationAuthorizationStore(initialState: .authorized),
+            annotationRepository: repository,
+            openAISettingsStore: settingsStore,
+            deviceLabelingService: MockDeviceLabelingService(result: .success("Apple iPhone")),
+            defaults: UserDefaults(suiteName: #function)!,
+            now: Date.init
+        )
+
+        store.applyScanSnapshot(
+            WiFiScanSnapshot(
+                interface: .init(availableInterfaceNames: ["en0"], selectedInterfaceName: "en0", isPoweredOn: true),
+                observations: [
+                    .init(bssid: "AA:BB:CC:DD:EE:01", ssid: "Johnny_2G", channel: 6, band: .band2_4, channelWidthMHz: 20, rssi: -60, noise: -95)
+                ],
+                scannedAt: Date()
+            )
+        )
+
+        await store.generateAILabel(for: "AA:BB:CC:DD:EE:01")
+
+        XCTAssertEqual(store.annotationList.first?.friendlyName, "Apple iPhone (Johnny_2G)")
+    }
+
+    func testGenerateAILabelPreservesSavedFriendlyNameInParentheses() async throws {
+        let repository = InMemoryAnnotationRepository(records: [
+            NetworkAnnotationRecord(
+                bssid: "AA:BB:CC:DD:EE:02",
+                friendlyName: "Office Printer",
+                isOwned: false,
+                accentSeed: 0.2
+            )
+        ])
+        let settingsStore = makeSettingsStore()
+        let store = SpectrumStore(
+            scanner: MockWiFiScanner(),
+            locationStore: MockLocationAuthorizationStore(initialState: .authorized),
+            annotationRepository: repository,
+            openAISettingsStore: settingsStore,
+            deviceLabelingService: MockDeviceLabelingService(result: .success("HP Printer")),
+            defaults: UserDefaults(suiteName: #function)!,
+            now: Date.init
+        )
+
+        store.start()
+        store.applyScanSnapshot(
+            WiFiScanSnapshot(
+                interface: .init(availableInterfaceNames: ["en0"], selectedInterfaceName: "en0", isPoweredOn: true),
+                observations: [
+                    .init(bssid: "AA:BB:CC:DD:EE:02", ssid: "PrinterWiFi", channel: 44, band: .band5, channelWidthMHz: 40, rssi: -57, noise: -95)
+                ],
+                scannedAt: Date()
+            )
+        )
+
+        await store.generateAILabel(for: "AA:BB:CC:DD:EE:02")
+
+        XCTAssertEqual(store.annotationList.first?.friendlyName, "HP Printer (Office Printer)")
+    }
+
+    func testGenerateAILabelAvoidsDuplicateParentheticalWhenExistingLabelMatchesAIResult() async throws {
+        let repository = InMemoryAnnotationRepository(records: [
+            NetworkAnnotationRecord(
+                bssid: "AA:BB:CC:DD:EE:03",
+                friendlyName: "Apple iPhone",
+                isOwned: false,
+                accentSeed: 0.4
+            )
+        ])
+        let settingsStore = makeSettingsStore()
+        let store = SpectrumStore(
+            scanner: MockWiFiScanner(),
+            locationStore: MockLocationAuthorizationStore(initialState: .authorized),
+            annotationRepository: repository,
+            openAISettingsStore: settingsStore,
+            deviceLabelingService: MockDeviceLabelingService(result: .success("Apple iPhone")),
+            defaults: UserDefaults(suiteName: #function)!,
+            now: Date.init
+        )
+
+        store.start()
+        store.applyScanSnapshot(
+            WiFiScanSnapshot(
+                interface: .init(availableInterfaceNames: ["en0"], selectedInterfaceName: "en0", isPoweredOn: true),
+                observations: [
+                    .init(bssid: "AA:BB:CC:DD:EE:03", ssid: nil, channel: 149, band: .band5, channelWidthMHz: 80, rssi: -49, noise: -93)
+                ],
+                scannedAt: Date()
+            )
+        )
+
+        await store.generateAILabel(for: "AA:BB:CC:DD:EE:03")
+
+        XCTAssertEqual(store.annotationList.first?.friendlyName, "Apple iPhone")
+    }
+
+    func testGenerateAILabelReportsConfigurationAndServiceErrors() async throws {
+        let repository = InMemoryAnnotationRepository()
+        let emptySettings = OpenAISettingsStore(
+            defaults: UserDefaults(suiteName: UUID().uuidString)!,
+            keychain: InMemoryKeychainValueStore()
+        )
+        emptySettings.model = ""
+        let store = SpectrumStore(
+            scanner: MockWiFiScanner(),
+            locationStore: MockLocationAuthorizationStore(initialState: .authorized),
+            annotationRepository: repository,
+            openAISettingsStore: emptySettings,
+            deviceLabelingService: MockDeviceLabelingService(result: .failure(DeviceLabelingServiceError.requestFailed("ignored"))),
+            defaults: UserDefaults(suiteName: #function)!,
+            now: Date.init
+        )
+
+        store.applyScanSnapshot(
+            WiFiScanSnapshot(
+                interface: .init(availableInterfaceNames: ["en0"], selectedInterfaceName: "en0", isPoweredOn: true),
+                observations: [
+                    .init(bssid: "AA:BB:CC:DD:EE:04", ssid: "Camera", channel: 11, band: .band2_4, channelWidthMHz: 20, rssi: -63, noise: -95)
+                ],
+                scannedAt: Date()
+            )
+        )
+
+        await store.generateAILabel(for: "AA:BB:CC:DD:EE:04")
+        XCTAssertEqual(
+            store.selectedAILabelingMessage,
+            "Add your OpenAI API key and reasoning model in Settings to generate AI labels."
+        )
+
+        let configuredStore = SpectrumStore(
+            scanner: MockWiFiScanner(),
+            locationStore: MockLocationAuthorizationStore(initialState: .authorized),
+            annotationRepository: repository,
+            openAISettingsStore: makeSettingsStore(),
+            deviceLabelingService: MockDeviceLabelingService(result: .failure(DeviceLabelingServiceError.requestFailed("OpenAI request failed."))),
+            defaults: UserDefaults(suiteName: UUID().uuidString)!,
+            now: Date.init
+        )
+
+        configuredStore.applyScanSnapshot(
+            WiFiScanSnapshot(
+                interface: .init(availableInterfaceNames: ["en0"], selectedInterfaceName: "en0", isPoweredOn: true),
+                observations: [
+                    .init(bssid: "AA:BB:CC:DD:EE:05", ssid: "Tablet", channel: 157, band: .band5, channelWidthMHz: 80, rssi: -55, noise: -95)
+                ],
+                scannedAt: Date()
+            )
+        )
+        configuredStore.selectSignal("AA:BB:CC:DD:EE:05")
+
+        await configuredStore.generateAILabel(for: "AA:BB:CC:DD:EE:05")
+
+        XCTAssertEqual(configuredStore.selectedAILabelingMessage, "OpenAI request failed.")
+    }
+
+    private func makeSettingsStore() -> OpenAISettingsStore {
+        let defaults = UserDefaults(suiteName: UUID().uuidString)!
+        let keychain = InMemoryKeychainValueStore(values: ["openai.api-key": "sk-test"])
+        let store = OpenAISettingsStore(defaults: defaults, keychain: keychain)
+        store.model = OpenAISettingsStore.exampleMiniModel
+        return store
+    }
+}
+
+private final class MockDeviceLabelingService: DeviceLabelingService {
+    private let result: Result<String, Error>
+
+    init(result: Result<String, Error>) {
+        self.result = result
+    }
+
+    func generateLabel(
+        for macAddress: String,
+        model: String,
+        apiKey: String,
+        maxOutputTokens: Int
+    ) async throws -> String {
+        _ = (macAddress, model, apiKey, maxOutputTokens)
+        return try result.get()
+    }
 }

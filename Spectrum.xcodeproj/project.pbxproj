@@ -22,6 +22,11 @@
 		B0000000000000000000003E /* SpectrumMathTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0000000000000000000002E /* SpectrumMathTests.swift */; };
 		B0000000000000000000003F /* SpectrumStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0000000000000000000002F /* SpectrumStoreTests.swift */; };
 		B00000000000000000000041 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000042 /* Assets.xcassets */; };
+		B00000000000000000000044 /* OpenAISettingsStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000049 /* OpenAISettingsStore.swift */; };
+		B00000000000000000000045 /* DeviceLabelingService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0000000000000000000004A /* DeviceLabelingService.swift */; };
+		B00000000000000000000046 /* OpenAISettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0000000000000000000004B /* OpenAISettingsView.swift */; };
+		B00000000000000000000047 /* DeviceLabelingServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0000000000000000000004C /* DeviceLabelingServiceTests.swift */; };
+		B00000000000000000000048 /* OpenAISettingsStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0000000000000000000004D /* OpenAISettingsStoreTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -53,6 +58,11 @@
 		B0000000000000000000002E /* SpectrumMathTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpectrumMathTests.swift; sourceTree = "<group>"; };
 		B0000000000000000000002F /* SpectrumStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpectrumStoreTests.swift; sourceTree = "<group>"; };
 		B00000000000000000000042 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		B00000000000000000000049 /* OpenAISettingsStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenAISettingsStore.swift; sourceTree = "<group>"; };
+		B0000000000000000000004A /* DeviceLabelingService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceLabelingService.swift; sourceTree = "<group>"; };
+		B0000000000000000000004B /* OpenAISettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenAISettingsView.swift; sourceTree = "<group>"; };
+		B0000000000000000000004C /* DeviceLabelingServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceLabelingServiceTests.swift; sourceTree = "<group>"; };
+		B0000000000000000000004D /* OpenAISettingsStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenAISettingsStoreTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -130,6 +140,8 @@
 				B00000000000000000000026 /* LocationAuthorizationStore.swift */,
 				B00000000000000000000027 /* AnnotationRepository.swift */,
 				B00000000000000000000028 /* SpectrumStore.swift */,
+				B00000000000000000000049 /* OpenAISettingsStore.swift */,
+				B0000000000000000000004A /* DeviceLabelingService.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -140,6 +152,7 @@
 				B00000000000000000000029 /* SpectrumRootView.swift */,
 				B0000000000000000000002A /* SpectrumAnalyzerView.swift */,
 				B0000000000000000000002B /* SpectrumChromeViews.swift */,
+				B0000000000000000000004B /* OpenAISettingsView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -157,6 +170,8 @@
 			children = (
 				B0000000000000000000002E /* SpectrumMathTests.swift */,
 				B0000000000000000000002F /* SpectrumStoreTests.swift */,
+				B0000000000000000000004C /* DeviceLabelingServiceTests.swift */,
+				B0000000000000000000004D /* OpenAISettingsStoreTests.swift */,
 			);
 			path = SpectrumTests;
 			sourceTree = "<group>";
@@ -264,6 +279,9 @@
 				B00000000000000000000039 /* SpectrumRootView.swift in Sources */,
 				B0000000000000000000003A /* SpectrumAnalyzerView.swift in Sources */,
 				B0000000000000000000003B /* SpectrumChromeViews.swift in Sources */,
+				B00000000000000000000044 /* OpenAISettingsStore.swift in Sources */,
+				B00000000000000000000045 /* DeviceLabelingService.swift in Sources */,
+				B00000000000000000000046 /* OpenAISettingsView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -273,6 +291,8 @@
 			files = (
 				B0000000000000000000003E /* SpectrumMathTests.swift in Sources */,
 				B0000000000000000000003F /* SpectrumStoreTests.swift in Sources */,
+				B00000000000000000000047 /* DeviceLabelingServiceTests.swift in Sources */,
+				B00000000000000000000048 /* OpenAISettingsStoreTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

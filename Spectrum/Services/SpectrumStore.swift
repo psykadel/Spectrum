@@ -15,6 +15,8 @@ final class SpectrumStore {
     private let scanner: any WiFiScanProviding
     private let locationStore: any LocationAuthorizationProviding
     private let annotationRepository: any NetworkAnnotationRepositoryProtocol
+    private let openAISettingsStore: OpenAISettingsStore
+    private let deviceLabelingService: any DeviceLabelingService
     private let defaults: UserDefaults
     private let now: () -> Date
     private let openURL: (URL) -> Bool
@@ -27,6 +29,9 @@ final class SpectrumStore {
     private(set) var hasStarted = false
     private(set) var sceneIsFocused = true
     private(set) var scanGeneration = 0
+    private(set) var activeAILabelRequests: Set<String> = []
+    private(set) var aiLabelingErrors: [String: String] = [:]
+    private(set) var aiLabelingDebugDetails: [String: String] = [:]
 
     var bandVisibility: BandVisibility
     var isInspectorVisible = false
@@ -36,6 +41,8 @@ final class SpectrumStore {
         scanner: any WiFiScanProviding,
         locationStore: any LocationAuthorizationProviding,
         annotationRepository: any NetworkAnnotationRepositoryProtocol,
+        openAISettingsStore: OpenAISettingsStore,
+        deviceLabelingService: any DeviceLabelingService,
         defaults: UserDefaults = .standard,
         now: @escaping () -> Date = Date.init,
         openURL: @escaping (URL) -> Bool = { NSWorkspace.shared.open($0) }
@@ -43,6 +50,8 @@ final class SpectrumStore {
         self.scanner = scanner
         self.locationStore = locationStore
         self.annotationRepository = annotationRepository
+        self.openAISettingsStore = openAISettingsStore
+        self.deviceLabelingService = deviceLabelingService
         self.defaults = defaults
         self.now = now
         self.openURL = openURL
@@ -50,6 +59,26 @@ final class SpectrumStore {
 
         let storedBands = defaults.object(forKey: DefaultsKey.bandVisibility) as? Int ?? BandVisibility.default.rawValue
         bandVisibility = BandVisibility(rawValue: storedBands).isEmpty ? .default : BandVisibility(rawValue: storedBands)
+    }
+
+    convenience init(
+        scanner: any WiFiScanProviding,
+        locationStore: any LocationAuthorizationProviding,
+        annotationRepository: any NetworkAnnotationRepositoryProtocol,
+        defaults: UserDefaults = .standard,
+        now: @escaping () -> Date = Date.init,
+        openURL: @escaping (URL) -> Bool = { NSWorkspace.shared.open($0) }
+    ) {
+        self.init(
+            scanner: scanner,
+            locationStore: locationStore,
+            annotationRepository: annotationRepository,
+            openAISettingsStore: OpenAISettingsStore(),
+            deviceLabelingService: OpenAIResponsesDeviceLabelingService(),
+            defaults: defaults,
+            now: now,
+            openURL: openURL
+        )
     }
 
     var activeBands: [SpectrumBand] {
@@ -150,6 +179,24 @@ final class SpectrumStore {
             let rhs = $1.trimmedFriendlyName.isEmpty ? $1.bssid : $1.trimmedFriendlyName
             return (lhs, $0.bssid) < (rhs, $1.bssid)
         }
+    }
+
+    var canGenerateAILabels: Bool {
+        openAISettingsStore.isConfigured
+    }
+
+    var selectedAILabelingMessage: String? {
+        if !openAISettingsStore.isConfigured {
+            return "Add your OpenAI API key and reasoning model in Settings to generate AI labels."
+        }
+
+        guard let selectedBSSID else { return nil }
+        return aiLabelingErrors[selectedBSSID]
+    }
+
+    var selectedAILabelingDebugDetails: String? {
+        guard let selectedBSSID else { return nil }
+        return aiLabelingDebugDetails[selectedBSSID]
     }
 
     func start() {
@@ -263,9 +310,59 @@ final class SpectrumStore {
 
     func selectSignal(_ bssid: String?) {
         selectedBSSID = bssid
+        if let bssid {
+            aiLabelingErrors[bssid] = nil
+            aiLabelingDebugDetails[bssid] = nil
+        }
         guard let bssid else { return }
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(bssid, forType: .string)
+    }
+
+    func isGeneratingAILabel(for bssid: String) -> Bool {
+        activeAILabelRequests.contains(bssid)
+    }
+
+    func generateAILabel(for bssid: String) async {
+        guard !activeAILabelRequests.contains(bssid) else { return }
+
+        guard let signal = renderedSignal(for: bssid, at: now()) else {
+            aiLabelingErrors[bssid] = "This device is no longer available."
+            return
+        }
+
+        guard let configuration = openAISettingsStore.configuration else {
+            aiLabelingErrors[bssid] = DeviceLabelingServiceError.missingConfiguration.localizedDescription
+            return
+        }
+
+        activeAILabelRequests.insert(bssid)
+        aiLabelingErrors[bssid] = nil
+        aiLabelingDebugDetails[bssid] = nil
+
+        do {
+            let baseLabel = try await deviceLabelingService.generateLabel(
+                for: bssid,
+                model: configuration.model,
+                apiKey: configuration.apiKey,
+                maxOutputTokens: configuration.maxOutputTokens
+            )
+            let mergedLabel = mergedAILabel(
+                aiLabel: baseLabel,
+                currentDisplayName: signal.displayName,
+                bssid: bssid
+            )
+            saveAnnotation(
+                bssid: bssid,
+                friendlyName: mergedLabel,
+                isOwned: signal.isOwned
+            )
+        } catch {
+            aiLabelingErrors[bssid] = error.localizedDescription
+            aiLabelingDebugDetails[bssid] = debugDetails(from: error)
+        }
+
+        activeAILabelRequests.remove(bssid)
     }
 
     func renderedSignals(for band: SpectrumBand, at date: Date) -> [RenderedSignalEnvelope] {
@@ -516,6 +613,33 @@ final class SpectrumStore {
             partial = partial &* 31 &+ UInt64(scalar.value)
         }
         return Double(scalar % 1000) / 1000
+    }
+
+    private func mergedAILabel(
+        aiLabel: String,
+        currentDisplayName: String,
+        bssid: String
+    ) -> String {
+        guard currentDisplayName != bssid else { return aiLabel }
+
+        if currentDisplayName.localizedCaseInsensitiveCompare(aiLabel) == .orderedSame {
+            return aiLabel
+        }
+
+        let mergedPrefix = aiLabel.lowercased() + " ("
+        let loweredDisplayName = currentDisplayName.lowercased()
+        if loweredDisplayName.hasPrefix(mergedPrefix), currentDisplayName.hasSuffix(")") {
+            return currentDisplayName
+        }
+
+        return "\(aiLabel) (\(currentDisplayName))"
+    }
+
+    private func debugDetails(from error: Error) -> String? {
+        if let serviceError = error as? DeviceLabelingServiceError {
+            return serviceError.debugDetails
+        }
+        return nil
     }
 
     private func persistPreferences() {

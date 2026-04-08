@@ -174,14 +174,46 @@ struct InspectorView: View {
                     Toggle("Owned by me", isOn: $ownedState)
                         .toggleStyle(.checkbox)
 
-                    Button("Save Label") {
-                        store.saveAnnotation(
-                            bssid: selected.bssid,
-                            friendlyName: draftName,
-                            isOwned: ownedState
-                        )
+                    HStack(spacing: 10) {
+                        Button("Save Label") {
+                            store.saveAnnotation(
+                                bssid: selected.bssid,
+                                friendlyName: draftName,
+                                isOwned: ownedState
+                            )
+                        }
+                        .buttonStyle(.glassProminent)
+
+                        Button("Ask AI for Label") {
+                            store.selectSignal(selected.bssid)
+                            Task {
+                                await store.generateAILabel(for: selected.bssid)
+                            }
+                        }
+                        .buttonStyle(.glass)
+                        .disabled(!store.canGenerateAILabels || store.isGeneratingAILabel(for: selected.bssid))
+
+                        if store.isGeneratingAILabel(for: selected.bssid) {
+                            ProgressView()
+                                .controlSize(.small)
+                                .tint(.white.opacity(0.9))
+                        }
                     }
-                    .buttonStyle(.glassProminent)
+
+                    if let message = store.selectedAILabelingMessage {
+                        Text(message)
+                            .font(.system(size: 12, weight: .medium, design: .rounded))
+                            .foregroundStyle(store.canGenerateAILabels ? .orange.opacity(0.9) : .white.opacity(0.58))
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+
+                    if let details = store.selectedAILabelingDebugDetails {
+                        Text(details)
+                            .font(.system(size: 11, weight: .medium, design: .monospaced))
+                            .foregroundStyle(.white.opacity(0.72))
+                            .textSelection(.enabled)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                 }
                 .padding(18)
                 .background(
@@ -192,6 +224,9 @@ struct InspectorView: View {
                     syncEditor(with: selected)
                 }
                 .onChange(of: selected.bssid) { _, _ in
+                    syncEditor(with: selected)
+                }
+                .onChange(of: selected.displayName) { _, _ in
                     syncEditor(with: selected)
                 }
             }
