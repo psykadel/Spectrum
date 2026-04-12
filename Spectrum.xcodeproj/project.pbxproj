@@ -27,6 +27,8 @@
 		B00000000000000000000046 /* OpenAISettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0000000000000000000004B /* OpenAISettingsView.swift */; };
 		B00000000000000000000047 /* DeviceLabelingServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0000000000000000000004C /* DeviceLabelingServiceTests.swift */; };
 		B00000000000000000000048 /* OpenAISettingsStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0000000000000000000004D /* OpenAISettingsStoreTests.swift */; };
+		B0000000000000000000004E /* ChannelAdvisor.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0000000000000000000004F /* ChannelAdvisor.swift */; };
+		B00000000000000000000050 /* ChannelAdvisorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000051 /* ChannelAdvisorTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -63,6 +65,8 @@
 		B0000000000000000000004B /* OpenAISettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenAISettingsView.swift; sourceTree = "<group>"; };
 		B0000000000000000000004C /* DeviceLabelingServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceLabelingServiceTests.swift; sourceTree = "<group>"; };
 		B0000000000000000000004D /* OpenAISettingsStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenAISettingsStoreTests.swift; sourceTree = "<group>"; };
+		B0000000000000000000004F /* ChannelAdvisor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChannelAdvisor.swift; sourceTree = "<group>"; };
+		B00000000000000000000051 /* ChannelAdvisorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChannelAdvisorTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -142,6 +146,7 @@
 				B00000000000000000000028 /* SpectrumStore.swift */,
 				B00000000000000000000049 /* OpenAISettingsStore.swift */,
 				B0000000000000000000004A /* DeviceLabelingService.swift */,
+				B0000000000000000000004F /* ChannelAdvisor.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -172,6 +177,7 @@
 				B0000000000000000000002F /* SpectrumStoreTests.swift */,
 				B0000000000000000000004C /* DeviceLabelingServiceTests.swift */,
 				B0000000000000000000004D /* OpenAISettingsStoreTests.swift */,
+				B00000000000000000000051 /* ChannelAdvisorTests.swift */,
 			);
 			path = SpectrumTests;
 			sourceTree = "<group>";
@@ -282,6 +288,7 @@
 				B00000000000000000000044 /* OpenAISettingsStore.swift in Sources */,
 				B00000000000000000000045 /* DeviceLabelingService.swift in Sources */,
 				B00000000000000000000046 /* OpenAISettingsView.swift in Sources */,
+				B0000000000000000000004E /* ChannelAdvisor.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -293,6 +300,7 @@
 				B0000000000000000000003F /* SpectrumStoreTests.swift in Sources */,
 				B00000000000000000000047 /* DeviceLabelingServiceTests.swift in Sources */,
 				B00000000000000000000048 /* OpenAISettingsStoreTests.swift in Sources */,
+				B00000000000000000000050 /* ChannelAdvisorTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

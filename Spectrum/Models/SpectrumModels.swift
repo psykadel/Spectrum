@@ -160,6 +160,25 @@ struct WiFiScanSnapshot: Equatable {
     let scannedAt: Date
 }
 
+enum BandChannelAdvice: Equatable, Hashable {
+    case scanning
+    case recommended(primaryChannel: Int, channelWidthMHz: Int)
+
+    func badgeText(for band: SpectrumBand) -> String {
+        switch self {
+        case .scanning:
+            "Scanning…"
+        case let .recommended(primaryChannel, channelWidthMHz):
+            switch band {
+            case .band2_4:
+                "Clearest: \(primaryChannel)"
+            case .band5, .band6:
+                "Clearest: \(primaryChannel) • \(channelWidthMHz) MHz"
+            }
+        }
+    }
+}
+
 struct ObservedAccessPoint: Identifiable, Equatable {
     let bssid: String
     var ssid: String?

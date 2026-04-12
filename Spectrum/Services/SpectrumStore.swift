@@ -17,6 +17,7 @@ final class SpectrumStore {
     private let annotationRepository: any NetworkAnnotationRepositoryProtocol
     private let openAISettingsStore: OpenAISettingsStore
     private let deviceLabelingService: any DeviceLabelingService
+    private let channelAdvisor: any ChannelAdvising
     private let defaults: UserDefaults
     private let now: () -> Date
     private let openURL: (URL) -> Bool
@@ -32,6 +33,7 @@ final class SpectrumStore {
     private(set) var activeAILabelRequests: Set<String> = []
     private(set) var aiLabelingErrors: [String: String] = [:]
     private(set) var aiLabelingDebugDetails: [String: String] = [:]
+    private(set) var bandAdvice: [SpectrumBand: BandChannelAdvice] = [:]
 
     var bandVisibility: BandVisibility
     var isInspectorVisible = false
@@ -43,6 +45,7 @@ final class SpectrumStore {
         annotationRepository: any NetworkAnnotationRepositoryProtocol,
         openAISettingsStore: OpenAISettingsStore,
         deviceLabelingService: any DeviceLabelingService,
+        channelAdvisor: any ChannelAdvising = ChannelAdvisor(),
         defaults: UserDefaults = .standard,
         now: @escaping () -> Date = Date.init,
         openURL: @escaping (URL) -> Bool = { NSWorkspace.shared.open($0) }
@@ -52,6 +55,7 @@ final class SpectrumStore {
         self.annotationRepository = annotationRepository
         self.openAISettingsStore = openAISettingsStore
         self.deviceLabelingService = deviceLabelingService
+        self.channelAdvisor = channelAdvisor
         self.defaults = defaults
         self.now = now
         self.openURL = openURL
@@ -65,6 +69,7 @@ final class SpectrumStore {
         scanner: any WiFiScanProviding,
         locationStore: any LocationAuthorizationProviding,
         annotationRepository: any NetworkAnnotationRepositoryProtocol,
+        channelAdvisor: any ChannelAdvising = ChannelAdvisor(),
         defaults: UserDefaults = .standard,
         now: @escaping () -> Date = Date.init,
         openURL: @escaping (URL) -> Bool = { NSWorkspace.shared.open($0) }
@@ -75,6 +80,7 @@ final class SpectrumStore {
             annotationRepository: annotationRepository,
             openAISettingsStore: OpenAISettingsStore(),
             deviceLabelingService: OpenAIResponsesDeviceLabelingService(),
+            channelAdvisor: channelAdvisor,
             defaults: defaults,
             now: now,
             openURL: openURL
@@ -183,6 +189,10 @@ final class SpectrumStore {
 
     var canGenerateAILabels: Bool {
         openAISettingsStore.isConfigured
+    }
+
+    func advice(for band: SpectrumBand) -> BandChannelAdvice {
+        bandAdvice[band] ?? .scanning
     }
 
     var selectedAILabelingMessage: String? {
@@ -298,8 +308,12 @@ final class SpectrumStore {
             observedAccessPoints.removeAll()
             selectedBSSID = nil
             scannerMessage = nil
+            bandAdvice.removeAll()
         }
         scanGeneration += 1
+        Task {
+            await channelAdvisor.reset()
+        }
         scanner.resetSession()
         scanner.stop()
         if hasStarted {
@@ -439,9 +453,18 @@ final class SpectrumStore {
         case let .scanUpdated(snapshot):
             scannerMessage = nil
             applyScanSnapshot(snapshot)
+            let generation = scanGeneration
+            Task { [weak self] in
+                await self?.refreshBandAdvice(using: snapshot, generation: generation)
+            }
         case let .scanFailed(message):
             scannerMessage = message
         }
+    }
+
+    func ingestScanSnapshot(_ snapshot: WiFiScanSnapshot) async {
+        applyScanSnapshot(snapshot)
+        await refreshBandAdvice(using: snapshot, generation: scanGeneration)
     }
 
     func applyScanSnapshot(_ snapshot: WiFiScanSnapshot) {
@@ -640,6 +663,12 @@ final class SpectrumStore {
             return serviceError.debugDetails
         }
         return nil
+    }
+
+    private func refreshBandAdvice(using snapshot: WiFiScanSnapshot, generation: Int) async {
+        let advice = await channelAdvisor.ingest(snapshot)
+        guard generation == scanGeneration else { return }
+        bandAdvice = advice
     }
 
     private func persistPreferences() {

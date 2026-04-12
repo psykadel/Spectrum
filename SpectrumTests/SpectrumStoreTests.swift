@@ -256,6 +256,85 @@ final class SpectrumStoreTests: XCTestCase {
         XCTAssertTrue(store.inspectorSignals.isEmpty)
     }
 
+    func testBandAdviceTransitionsFromScanningToRecommendation() async {
+        let store = SpectrumStore(
+            scanner: MockWiFiScanner(),
+            locationStore: MockLocationAuthorizationStore(initialState: .authorized),
+            annotationRepository: InMemoryAnnotationRepository(),
+            defaults: UserDefaults(suiteName: #function)!,
+            now: Date.init
+        )
+
+        let snapshot0 = WiFiScanSnapshot(
+            interface: .init(availableInterfaceNames: ["en0"], selectedInterfaceName: "en0", isPoweredOn: true),
+            observations: [
+                .init(bssid: "AA:BB:CC:DD:EE:52", ssid: "Busy-52", channel: 52, band: .band5, channelWidthMHz: 80, rssi: -50, noise: -95),
+                .init(bssid: "AA:BB:CC:DD:EE:100", ssid: "Busy-100", channel: 100, band: .band5, channelWidthMHz: 80, rssi: -50, noise: -95),
+                .init(bssid: "AA:BB:CC:DD:EE:116", ssid: "Busy-116", channel: 116, band: .band5, channelWidthMHz: 80, rssi: -50, noise: -95),
+                .init(bssid: "AA:BB:CC:DD:EE:132", ssid: "Busy-132", channel: 132, band: .band5, channelWidthMHz: 80, rssi: -50, noise: -95),
+                .init(bssid: "AA:BB:CC:DD:EE:149", ssid: "Busy-149", channel: 149, band: .band5, channelWidthMHz: 80, rssi: -50, noise: -95)
+            ],
+            scannedAt: Date(timeIntervalSinceReferenceDate: 0)
+        )
+        let snapshot1 = WiFiScanSnapshot(
+            interface: snapshot0.interface,
+            observations: snapshot0.observations,
+            scannedAt: Date(timeIntervalSinceReferenceDate: 10)
+        )
+        let snapshot2 = WiFiScanSnapshot(
+            interface: snapshot0.interface,
+            observations: snapshot0.observations,
+            scannedAt: Date(timeIntervalSinceReferenceDate: 20)
+        )
+
+        await store.ingestScanSnapshot(snapshot0)
+        XCTAssertEqual(store.advice(for: .band5), .scanning)
+
+        await store.ingestScanSnapshot(snapshot1)
+        XCTAssertEqual(store.advice(for: .band5), .scanning)
+
+        await store.ingestScanSnapshot(snapshot2)
+        XCTAssertEqual(store.advice(for: .band5), .recommended(primaryChannel: 36, channelWidthMHz: 80))
+    }
+
+    func testClearSignalsResetsChannelAdvisorState() async {
+        let advisor = MockChannelAdvisor(advice: [
+            .band5: .recommended(primaryChannel: 149, channelWidthMHz: 80)
+        ])
+        let store = SpectrumStore(
+            scanner: MockWiFiScanner(),
+            locationStore: MockLocationAuthorizationStore(initialState: .authorized),
+            annotationRepository: InMemoryAnnotationRepository(),
+            channelAdvisor: advisor,
+            defaults: UserDefaults(suiteName: #function)!,
+            now: Date.init
+        )
+
+        await store.ingestScanSnapshot(
+            WiFiScanSnapshot(
+                interface: .init(availableInterfaceNames: ["en0"], selectedInterfaceName: "en0", isPoweredOn: true),
+                observations: [
+                    .init(bssid: "AA:BB:CC:DD:EE:49", ssid: "Busy-149", channel: 149, band: .band5, channelWidthMHz: 80, rssi: -50, noise: -95)
+                ],
+                scannedAt: Date()
+            )
+        )
+        XCTAssertEqual(store.advice(for: .band5), .recommended(primaryChannel: 149, channelWidthMHz: 80))
+
+        store.clearSignals()
+
+        for _ in 0 ..< 10 {
+            if await advisor.currentResetCallCount() == 1 {
+                break
+            }
+            await Task.yield()
+        }
+
+        let resetCallCount = await advisor.currentResetCallCount()
+        XCTAssertEqual(resetCallCount, 1)
+        XCTAssertEqual(store.advice(for: .band5), .scanning)
+    }
+
     func testLocationSettingsFallsBackWhenFirstURLFails() {
         let scanner = MockWiFiScanner()
         let location = MockLocationAuthorizationStore(initialState: .servicesDisabled)
@@ -602,5 +681,28 @@ private final class MockDeviceLabelingService: DeviceLabelingService {
     ) async throws -> String {
         _ = (macAddress, model, apiKey, maxOutputTokens)
         return try result.get()
+    }
+}
+
+private actor MockChannelAdvisor: ChannelAdvising {
+    private(set) var resetCallCount = 0
+    private var advice: [SpectrumBand: BandChannelAdvice]
+
+    init(advice: [SpectrumBand: BandChannelAdvice]) {
+        self.advice = advice
+    }
+
+    func ingest(_ snapshot: WiFiScanSnapshot) async -> [SpectrumBand: BandChannelAdvice] {
+        _ = snapshot
+        return advice
+    }
+
+    func reset() async {
+        resetCallCount += 1
+        advice = [:]
+    }
+
+    func currentResetCallCount() -> Int {
+        resetCallCount
     }
 }

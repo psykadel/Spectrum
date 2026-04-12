@@ -62,6 +62,16 @@ private struct BandLaneView: View {
                     .padding(.top, 18)
                     .padding(.leading, 20)
 
+                if store.overlayState == nil {
+                    BandRecommendationBadge(
+                        band: band,
+                        advice: store.advice(for: band)
+                    )
+                    .padding(.top, 18)
+                    .padding(.trailing, 20)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+                }
+
                 channelLabels(size: geometry.size)
                 signalLabels(size: geometry.size)
             }
@@ -353,6 +363,30 @@ private struct ChannelGuideLabel: View {
                     )
             )
             .rotationEffect(.degrees(-90))
+    }
+}
+
+private struct BandRecommendationBadge: View {
+    let band: SpectrumBand
+    let advice: BandChannelAdvice
+
+    var body: some View {
+        Text(advice.badgeText(for: band))
+            .font(.system(size: 12, weight: .semibold, design: .rounded))
+            .foregroundStyle(.white.opacity(0.9))
+            .lineLimit(1)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(
+                Capsule(style: .continuous)
+                    .fill(.ultraThinMaterial.opacity(0.88))
+            )
+            .overlay(
+                Capsule(style: .continuous)
+                    .stroke(Color.white.opacity(0.12), lineWidth: 1)
+            )
+            .shadow(color: Color.black.opacity(0.24), radius: 14, x: 0, y: 8)
+            .allowsHitTesting(false)
     }
 }
 
