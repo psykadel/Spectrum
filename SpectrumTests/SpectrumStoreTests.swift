@@ -1,4 +1,5 @@
 import XCTest
+import SQLite3
 @testable import Spectrum
 
 @MainActor
@@ -470,12 +471,119 @@ final class SpectrumStoreTests: XCTestCase {
         XCTAssertEqual(configuredStore.selectedAILabelingMessage, "OpenAI request failed.")
     }
 
+    func testAnnotationStoreLocationUsesBundleScopedStoreURL() throws {
+        let rootDirectory = makeTemporaryDirectory()
+        let storeURL = try AnnotationStoreLocation.prepareStoreURL(
+            fileManager: .default,
+            bundleIdentifier: "io.spectrum.custom",
+            appSupportDirectory: rootDirectory
+        )
+
+        XCTAssertEqual(
+            storeURL,
+            rootDirectory
+                .appendingPathComponent("io.spectrum.custom", isDirectory: true)
+                .appendingPathComponent("NetworkAnnotations.store", isDirectory: false)
+        )
+        XCTAssertTrue(
+            FileManager.default.fileExists(
+                atPath: rootDirectory
+                    .appendingPathComponent("io.spectrum.custom", isDirectory: true)
+                    .path()
+            )
+        )
+    }
+
+    func testAnnotationStoreLocationMigratesLegacyDefaultStore() throws {
+        let rootDirectory = makeTemporaryDirectory()
+        let legacyStoreURL = rootDirectory.appendingPathComponent("default.store", isDirectory: false)
+        try createLegacyAnnotationStore(at: legacyStoreURL)
+
+        let storeURL = try AnnotationStoreLocation.prepareStoreURL(
+            fileManager: .default,
+            bundleIdentifier: "io.spectrum.custom",
+            appSupportDirectory: rootDirectory
+        )
+
+        XCTAssertTrue(FileManager.default.fileExists(atPath: storeURL.path()))
+        XCTAssertEqual(readTableNames(from: storeURL), ["ZNETWORKANNOTATION"])
+        XCTAssertEqual(readTableNames(from: legacyStoreURL), ["ZNETWORKANNOTATION"])
+    }
+
     private func makeSettingsStore() -> OpenAISettingsStore {
         let defaults = UserDefaults(suiteName: UUID().uuidString)!
         let keychain = InMemoryKeychainValueStore(values: ["openai.api-key": "sk-test"])
         let store = OpenAISettingsStore(defaults: defaults, keychain: keychain)
         store.model = OpenAISettingsStore.exampleMiniModel
         return store
+    }
+
+    private func makeTemporaryDirectory() -> URL {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        addTeardownBlock {
+            try? FileManager.default.removeItem(at: directory)
+        }
+        return directory
+    }
+
+    private func createLegacyAnnotationStore(at url: URL) throws {
+        var database: OpaquePointer?
+        XCTAssertEqual(
+            sqlite3_open_v2(
+                url.path(),
+                &database,
+                SQLITE_OPEN_CREATE | SQLITE_OPEN_READWRITE,
+                nil
+            ),
+            SQLITE_OK
+        )
+        guard let database else {
+            XCTFail("Failed to create legacy test store")
+            return
+        }
+        defer { sqlite3_close(database) }
+
+        XCTAssertEqual(
+            sqlite3_exec(
+                database,
+                "CREATE TABLE ZNETWORKANNOTATION (Z_PK INTEGER PRIMARY KEY, ZBSSID TEXT);",
+                nil,
+                nil,
+                nil
+            ),
+            SQLITE_OK
+        )
+    }
+
+    private func readTableNames(from url: URL) -> [String] {
+        var database: OpaquePointer?
+        guard sqlite3_open_v2(url.path(), &database, SQLITE_OPEN_READONLY, nil) == SQLITE_OK, let database else {
+            sqlite3_close(database)
+            return []
+        }
+        defer { sqlite3_close(database) }
+
+        var statement: OpaquePointer?
+        guard sqlite3_prepare_v2(
+            database,
+            "SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE 'Z%';",
+            -1,
+            &statement,
+            nil
+        ) == SQLITE_OK, let statement else {
+            sqlite3_finalize(statement)
+            return []
+        }
+        defer { sqlite3_finalize(statement) }
+
+        var tableNames: [String] = []
+        while sqlite3_step(statement) == SQLITE_ROW {
+            if let name = sqlite3_column_text(statement, 0) {
+                tableNames.append(String(cString: name))
+            }
+        }
+        return tableNames.sorted()
     }
 }
 

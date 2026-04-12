@@ -1,6 +1,10 @@
 import AppKit
 import SwiftUI
 
+enum SpectrumWindowMetrics {
+    static let minimumContentSize = NSSize(width: 1180, height: 540)
+}
+
 struct WindowChromeConfigurator: NSViewRepresentable {
     func makeNSView(context _: Context) -> NSView {
         let view = NSView()
@@ -18,7 +22,7 @@ struct WindowChromeConfigurator: NSViewRepresentable {
 
     private func configureWindow(from view: NSView) {
         guard let window = view.window else { return }
-        let minimumSize = NSSize(width: 876, height: 540)
+        let minimumSize = SpectrumWindowMetrics.minimumContentSize
         window.titleVisibility = .hidden
         window.titlebarAppearsTransparent = true
         window.isMovableByWindowBackground = true

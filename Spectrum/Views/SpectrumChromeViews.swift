@@ -20,12 +20,15 @@ struct ControlRailView: View {
                     Text("Spectrum")
                         .font(.system(size: 20, weight: .bold, design: .rounded))
                         .foregroundStyle(.white.opacity(0.96))
+                        .lineLimit(1)
 
                     Text(store.statusLine)
                         .font(.system(size: 12, weight: .medium, design: .rounded))
                         .foregroundStyle(.white.opacity(0.66))
+                        .lineLimit(1)
                 }
             }
+            .fixedSize(horizontal: true, vertical: false)
 
             Spacer(minLength: 16)
 
@@ -48,6 +51,7 @@ struct ControlRailView: View {
                     }
                 } label: {
                     Label(store.interfaceSnapshot.selectedInterfaceName ?? "Interface", systemImage: "dot.radiowaves.left.and.right")
+                        .lineLimit(1)
                 }
                 .menuStyle(.borderlessButton)
                 .controlSize(.large)
@@ -87,8 +91,10 @@ private struct BandChipButton: View {
             HStack(spacing: 8) {
                 Image(systemName: isOn ? "checkmark.circle.fill" : "circle")
                 Text(title)
+                    .lineLimit(1)
             }
             .font(.system(size: 13, weight: .semibold, design: .rounded))
+            .fixedSize(horizontal: true, vertical: false)
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
             .foregroundStyle(isOn ? .white : .white.opacity(0.7))
@@ -222,7 +228,7 @@ struct InspectorView: View {
                 .onAppear {
                     syncEditor(with: selected)
                 }
-                .onChange(of: selected.bssid) { _, _ in
+                .onChange(of: selected) { _, _ in
                     syncEditor(with: selected)
                 }
             }

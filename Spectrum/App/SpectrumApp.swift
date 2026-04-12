@@ -10,8 +10,7 @@ struct SpectrumApp: App {
 
     init() {
         let schema = Schema([NetworkAnnotation.self])
-        let configuration = ModelConfiguration(schema: schema)
-        let container = try! ModelContainer(for: schema, configurations: [configuration])
+        let container = try! AnnotationStoreLocation.makeModelContainer(schema: schema)
         modelContainer = container
 
         let scanner = CoreWLANScanner()
@@ -39,7 +38,10 @@ struct SpectrumApp: App {
     var body: some Scene {
         Window("Spectrum", id: "main") {
             SpectrumRootView()
-                .frame(minWidth: 876, minHeight: 540)
+                .frame(
+                    minWidth: SpectrumWindowMetrics.minimumContentSize.width,
+                    minHeight: SpectrumWindowMetrics.minimumContentSize.height
+                )
                 .environment(store)
                 .environment(openAISettingsStore)
                 .modelContainer(modelContainer)

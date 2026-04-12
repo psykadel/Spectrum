@@ -40,6 +40,28 @@ enum SpectrumBand: Int, CaseIterable, Codable, Hashable, Identifiable {
             5925 ... 7125
         }
     }
+
+    var visualCenterRangeMHz: ClosedRange<Double> {
+        switch self {
+        case .band2_4:
+            2402 ... 2472
+        case .band5:
+            5170 ... 5835
+        case .band6:
+            5935 ... 7115
+        }
+    }
+
+    var majorChannels: [Int] {
+        switch self {
+        case .band2_4:
+            [1, 6, 11]
+        case .band5:
+            [36, 52, 100, 149, 165]
+        case .band6:
+            [1, 33, 65, 97, 129, 161, 193, 225]
+        }
+    }
 }
 
 struct BandVisibility: OptionSet, Codable, Hashable {
@@ -258,16 +280,34 @@ enum SpectrumMath {
 
     static func normalizedCenter(channel: Int, band: SpectrumBand) -> CGFloat {
         let frequency = centerFrequencyMHz(channel: channel, band: band)
-        let range = band.frequencyRangeMHz
+        let range = band.visualCenterRangeMHz
         let progress = (frequency - range.lowerBound) / (range.upperBound - range.lowerBound)
         return CGFloat(min(max(progress, 0), 1))
     }
 
     static func normalizedWidth(channelWidthMHz: Int, band: SpectrumBand) -> CGFloat {
-        let width = Double(max(channelWidthMHz, 20))
-        let range = band.frequencyRangeMHz
+        let width = occupiedChannelWidthMHz(channelWidthMHz: channelWidthMHz, band: band)
+        let range = band.visualCenterRangeMHz
         let progress = width / (range.upperBound - range.lowerBound)
-        return CGFloat(max(progress, 0.028))
+        return CGFloat(progress)
+    }
+
+    static func occupiedChannelWidthMHz(channelWidthMHz: Int, band: SpectrumBand) -> Double {
+        let width = Double(max(channelWidthMHz, 20))
+
+        switch band {
+        case .band2_4:
+            switch Int(width) {
+            case 20:
+                return 22
+            case 40:
+                return 44
+            default:
+                return width
+            }
+        case .band5, .band6:
+            return width
+        }
     }
 
     static func normalizedStrength(rssi: Int) -> CGFloat {

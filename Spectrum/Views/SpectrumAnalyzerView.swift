@@ -25,6 +25,14 @@ private struct BandLaneView: View {
     let band: SpectrumBand
     let signals: [RenderedSignalEnvelope]
 
+    private var activeChannels: Set<Int> {
+        Set(signals.map(\.channel))
+    }
+
+    private var labeledChannels: [Int] {
+        Array(activeChannels).sorted()
+    }
+
     var body: some View {
         GeometryReader { geometry in
             ZStack(alignment: .topLeading) {
@@ -54,6 +62,7 @@ private struct BandLaneView: View {
                     .padding(.top, 18)
                     .padding(.leading, 20)
 
+                channelLabels(size: geometry.size)
                 signalLabels(size: geometry.size)
             }
             .contentShape(Rectangle())
@@ -96,6 +105,19 @@ private struct BandLaneView: View {
             path.addLine(to: CGPoint(x: x, y: baseline))
             context.stroke(path, with: .color(Color.white.opacity(0.03)), lineWidth: 1)
         }
+
+        for channel in labeledChannels {
+            let isActive = activeChannels.contains(channel)
+            let x = insetRect.minX + SpectrumMath.normalizedCenter(channel: channel, band: band) * insetRect.width
+            var guidePath = Path()
+            guidePath.move(to: CGPoint(x: x, y: insetRect.minY + 22))
+            guidePath.addLine(to: CGPoint(x: x, y: baseline - 14))
+            context.stroke(
+                guidePath,
+                with: .color(Color.white.opacity(isActive ? 0.14 : 0.08)),
+                style: StrokeStyle(lineWidth: isActive ? 1.2 : 1, dash: isActive ? [3, 6] : [4, 8])
+            )
+        }
     }
 
     private func drawSignals(into context: inout GraphicsContext, size: CGSize, date: Date) {
@@ -104,7 +126,7 @@ private struct BandLaneView: View {
 
         for signal in signals {
             let centerX = insetRect.minX + signal.centerFraction * insetRect.width
-            let totalWidth = max(insetRect.width * signal.widthFraction * 4.6, 24)
+            let totalWidth = max(insetRect.width * signal.widthFraction, 18)
             let amplitude = max(insetRect.height * signal.amplitude * 0.92, 18)
             let phase = date.timeIntervalSinceReferenceDate * (0.6 + signal.shimmer * 1.4)
             let fillPath = signalPath(
@@ -177,10 +199,27 @@ private struct BandLaneView: View {
                     x: min(max(centerX, 96), insetRect.maxX - 96),
                     y: max(labelY, insetRect.minY + 58)
                 )
-                .opacity(signal.labelOpacity)
                 .onTapGesture {
                     store.selectSignal(signal.bssid)
                 }
+        }
+    }
+
+    private func channelLabels(size: CGSize) -> some View {
+        let insetRect = CGRect(origin: .zero, size: size).insetBy(dx: 18, dy: 20)
+
+        return ForEach(labeledChannels, id: \.self) { channel in
+            let xPosition = insetRect.minX + SpectrumMath.normalizedCenter(channel: channel, band: band) * insetRect.width
+
+            ChannelGuideLabel(
+                channel: channel,
+                isActive: activeChannels.contains(channel)
+            )
+                .position(
+                    x: min(max(xPosition, insetRect.minX + 18), insetRect.maxX - 18),
+                    y: insetRect.maxY - 52
+                )
+                .allowsHitTesting(false)
         }
     }
 
@@ -284,6 +323,39 @@ private struct BandLaneView: View {
     }
 }
 
+private struct ChannelGuideLabel: View {
+    let channel: Int
+    let isActive: Bool
+
+    var body: some View {
+        let label = "Ch \(channel)"
+
+        return Text(label)
+            .font(.system(size: 10, weight: .semibold, design: .rounded))
+            .foregroundStyle(isActive ? Color.white : Color(red: 0.68, green: 0.7, blue: 0.76))
+            .padding(.horizontal, 6)
+            .padding(.vertical, 4)
+            .background(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(
+                        isActive
+                            ? Color(red: 0.08, green: 0.11, blue: 0.18)
+                            : Color(red: 0.07, green: 0.08, blue: 0.11)
+                    )
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .stroke(
+                        isActive
+                            ? Color(red: 0.34, green: 0.7, blue: 1)
+                            : Color(red: 0.27, green: 0.29, blue: 0.35),
+                        lineWidth: 1
+                    )
+            )
+            .rotationEffect(.degrees(-90))
+    }
+}
+
 private struct SignalChipView: View {
     let signal: RenderedSignalEnvelope
 
@@ -300,23 +372,27 @@ private struct SignalChipView: View {
             VStack(alignment: .leading, spacing: 1) {
                 Text(signal.displayName)
                     .font(.system(size: 13, weight: signal.isOwned ? .bold : .semibold, design: .rounded))
-                    .foregroundStyle(.white.opacity(0.96))
+                    .foregroundStyle(Color.white)
                     .lineLimit(1)
 
                 Text("−\(abs(signal.rssi)) dBm · Ch \(signal.channel)")
                     .font(.system(size: 11, weight: .medium, design: .rounded))
-                    .foregroundStyle(.white.opacity(signal.isOwned ? 0.82 : 0.62))
+                    .foregroundStyle(
+                        signal.isOwned
+                            ? Color(red: 0.99, green: 0.92, blue: 0.68)
+                            : Color(red: 0.78, green: 0.82, blue: 0.9)
+                    )
             }
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
         .background(
             Capsule(style: .continuous)
-                .fill(signal.isOwned ? chipColor.opacity(0.34) : Color.white.opacity(0.08))
+                .fill(signal.isOwned ? ownedChipBackground : defaultChipBackground)
         )
         .overlay(
             Capsule(style: .continuous)
-                .stroke(signal.isOwned ? Color.white.opacity(0.95) : Color.white.opacity(0.12), lineWidth: signal.isOwned ? 1.8 : 1)
+                .stroke(signal.isOwned ? chipColor : Color(red: 0.36, green: 0.43, blue: 0.56), lineWidth: signal.isOwned ? 1.8 : 1.2)
         )
         .shadow(color: signal.isOwned ? chipColor.opacity(0.35) : Color.clear, radius: 18, x: 0, y: 8)
     }
@@ -326,5 +402,13 @@ private struct SignalChipView: View {
             return Color(red: 1.0, green: 0.82, blue: 0.14)
         }
         return Color(hue: signal.accentSeed, saturation: 0.86, brightness: 0.95)
+    }
+
+    private var defaultChipBackground: Color {
+        Color(red: 0.08, green: 0.1, blue: 0.15)
+    }
+
+    private var ownedChipBackground: Color {
+        Color(red: 0.2, green: 0.16, blue: 0.05)
     }
 }
