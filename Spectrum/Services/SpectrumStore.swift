@@ -8,6 +8,7 @@ import SwiftUI
 final class SpectrumStore {
     private enum DefaultsKey {
         static let bandVisibility = "Spectrum.bandVisibility"
+        static let manualZigbeeChannels = "Spectrum.manualZigbeeChannels"
     }
 
     private static let defaultAnimationIntensity = 0.58
@@ -34,6 +35,7 @@ final class SpectrumStore {
     private(set) var aiLabelingErrors: [String: String] = [:]
     private(set) var aiLabelingDebugDetails: [String: String] = [:]
     private(set) var bandAdvice: [SpectrumBand: BandChannelAdvice] = [:]
+    private(set) var manualZigbeeChannels: [ManualZigbeeChannel]
 
     var bandVisibility: BandVisibility
     var isInspectorVisible = false
@@ -63,6 +65,8 @@ final class SpectrumStore {
 
         let storedBands = defaults.object(forKey: DefaultsKey.bandVisibility) as? Int ?? BandVisibility.default.rawValue
         bandVisibility = BandVisibility(rawValue: storedBands).isEmpty ? .default : BandVisibility(rawValue: storedBands)
+        let storedZigbeeChannels = defaults.array(forKey: DefaultsKey.manualZigbeeChannels) as? [Int] ?? []
+        manualZigbeeChannels = Self.sanitizedManualZigbeeChannels(from: storedZigbeeChannels)
     }
 
     convenience init(
@@ -191,6 +195,20 @@ final class SpectrumStore {
         openAISettingsStore.isConfigured
     }
 
+    var renderedZigbeeChannels: [RenderedZigbeeChannel] {
+        manualZigbeeChannels.compactMap { channel in
+            guard let centerFrequency = SpectrumMath.zigbeeCenterFrequencyMHz(channel: channel.channel) else {
+                return nil
+            }
+
+            return RenderedZigbeeChannel(
+                channel: channel.channel,
+                centerFraction: SpectrumMath.normalizedCenter(frequencyMHz: centerFrequency, band: .band2_4),
+                widthFraction: SpectrumMath.normalizedWidth(occupiedWidthMHz: 2, band: .band2_4)
+            )
+        }
+    }
+
     func advice(for band: SpectrumBand) -> BandChannelAdvice {
         bandAdvice[band] ?? .scanning
     }
@@ -295,6 +313,22 @@ final class SpectrumStore {
 
     func selectInterface(_ name: String?) {
         scanner.selectInterface(named: name)
+    }
+
+    func addManualZigbeeChannels(_ channels: [Int]) {
+        let merged = manualZigbeeChannels.map(\.channel) + channels
+        manualZigbeeChannels = Self.sanitizedManualZigbeeChannels(from: merged)
+        persistPreferences()
+    }
+
+    func removeManualZigbeeChannel(_ channel: Int) {
+        manualZigbeeChannels.removeAll { $0.channel == channel }
+        persistPreferences()
+    }
+
+    func clearManualZigbeeChannels() {
+        manualZigbeeChannels.removeAll()
+        persistPreferences()
     }
 
     func rescanNow() {
@@ -673,5 +707,12 @@ final class SpectrumStore {
 
     private func persistPreferences() {
         defaults.set(bandVisibility.rawValue, forKey: DefaultsKey.bandVisibility)
+        defaults.set(manualZigbeeChannels.map(\.channel), forKey: DefaultsKey.manualZigbeeChannels)
+    }
+
+    private static func sanitizedManualZigbeeChannels(from channels: [Int]) -> [ManualZigbeeChannel] {
+        Array(Set(channels.filter { SpectrumMath.validZigbeeChannels.contains($0) }))
+            .sorted()
+            .map(ManualZigbeeChannel.init(channel:))
     }
 }

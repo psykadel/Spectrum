@@ -61,9 +61,10 @@ struct SpectrumApp: App {
         }
 
         Settings {
-            OpenAISettingsView()
+            SpectrumSettingsView()
+                .environment(store)
                 .environment(openAISettingsStore)
-                .frame(minWidth: 520, minHeight: 260)
+                .frame(minWidth: 560, minHeight: 420)
                 .preferredColorScheme(.dark)
         }
     }

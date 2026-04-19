@@ -44,7 +44,7 @@ enum SpectrumBand: Int, CaseIterable, Codable, Hashable, Identifiable {
     var visualCenterRangeMHz: ClosedRange<Double> {
         switch self {
         case .band2_4:
-            2402 ... 2472
+            2402 ... 2480
         case .band5:
             5170 ... 5835
         case .band6:
@@ -243,6 +243,41 @@ struct NetworkAnnotationRecord: Equatable, Hashable, Identifiable {
     }
 }
 
+struct ManualZigbeeChannel: Identifiable, Equatable, Hashable, Codable {
+    let channel: Int
+
+    var id: Int { channel }
+
+    var displayName: String {
+        "Zigbee \(channel)"
+    }
+
+    var shortLabel: String {
+        "Z\(channel)"
+    }
+}
+
+struct RenderedZigbeeChannel: Identifiable, Equatable {
+    let channel: Int
+    let centerFraction: CGFloat
+    let widthFraction: CGFloat
+
+    var id: Int { channel }
+
+    var displayName: String {
+        "Zigbee \(channel)"
+    }
+
+    var shortLabel: String {
+        "Z\(channel)"
+    }
+}
+
+struct ZigbeeChannelParseResult: Equatable {
+    let channels: [Int]
+    let invalidTokens: [String]
+}
+
 struct RenderedSignalEnvelope: Identifiable, Equatable {
     let bssid: String
     let displayName: String
@@ -282,6 +317,8 @@ struct InspectorChannelGroup: Identifiable, Equatable {
 }
 
 enum SpectrumMath {
+    static let validZigbeeChannels = 11 ... 26
+
     static func orderedBands(for visibility: BandVisibility) -> [SpectrumBand] {
         visibility.orderedBands
     }
@@ -298,16 +335,51 @@ enum SpectrumMath {
     }
 
     static func normalizedCenter(channel: Int, band: SpectrumBand) -> CGFloat {
-        let frequency = centerFrequencyMHz(channel: channel, band: band)
+        normalizedCenter(frequencyMHz: centerFrequencyMHz(channel: channel, band: band), band: band)
+    }
+
+    static func normalizedCenter(frequencyMHz: Double, band: SpectrumBand) -> CGFloat {
         let range = band.visualCenterRangeMHz
-        let progress = (frequency - range.lowerBound) / (range.upperBound - range.lowerBound)
+        let progress = (frequencyMHz - range.lowerBound) / (range.upperBound - range.lowerBound)
         return CGFloat(min(max(progress, 0), 1))
     }
 
+    static func zigbeeCenterFrequencyMHz(channel: Int) -> Double? {
+        guard validZigbeeChannels.contains(channel) else { return nil }
+        return 2405 + Double(channel - validZigbeeChannels.lowerBound) * 5
+    }
+
+    static func parseZigbeeChannels(from rawValue: String) -> ZigbeeChannelParseResult {
+        let separators = CharacterSet(charactersIn: ",; \n\t")
+        let tokens = rawValue
+            .components(separatedBy: separators)
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+
+        var accepted = Set<Int>()
+        var invalidTokens: [String] = []
+
+        for token in tokens {
+            guard let channel = Int(token), validZigbeeChannels.contains(channel) else {
+                invalidTokens.append(token)
+                continue
+            }
+            accepted.insert(channel)
+        }
+
+        return ZigbeeChannelParseResult(
+            channels: accepted.sorted(),
+            invalidTokens: invalidTokens
+        )
+    }
+
     static func normalizedWidth(channelWidthMHz: Int, band: SpectrumBand) -> CGFloat {
-        let width = occupiedChannelWidthMHz(channelWidthMHz: channelWidthMHz, band: band)
+        normalizedWidth(occupiedWidthMHz: occupiedChannelWidthMHz(channelWidthMHz: channelWidthMHz, band: band), band: band)
+    }
+
+    static func normalizedWidth(occupiedWidthMHz: Double, band: SpectrumBand) -> CGFloat {
         let range = band.visualCenterRangeMHz
-        let progress = width / (range.upperBound - range.lowerBound)
+        let progress = occupiedWidthMHz / (range.upperBound - range.lowerBound)
         return CGFloat(progress)
     }
 

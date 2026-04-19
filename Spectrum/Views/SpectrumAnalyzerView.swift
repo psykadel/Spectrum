@@ -29,6 +29,11 @@ private struct BandLaneView: View {
         Set(signals.map(\.channel))
     }
 
+    private var zigbeeChannels: [RenderedZigbeeChannel] {
+        guard band == .band2_4 else { return [] }
+        return store.renderedZigbeeChannels
+    }
+
     private var labeledChannels: [Int] {
         Array(activeChannels).sorted()
     }
@@ -55,6 +60,7 @@ private struct BandLaneView: View {
 
                 Canvas { context, size in
                     drawGrid(into: &context, size: size)
+                    drawZigbeeChannels(into: &context, size: size)
                     drawSignals(into: &context, size: size, date: Date())
                 }
 
@@ -73,6 +79,7 @@ private struct BandLaneView: View {
                 }
 
                 channelLabels(size: geometry.size)
+                zigbeeLabels(size: geometry.size)
                 signalLabels(size: geometry.size)
             }
             .contentShape(Rectangle())
@@ -126,6 +133,54 @@ private struct BandLaneView: View {
                 guidePath,
                 with: .color(Color.white.opacity(isActive ? 0.14 : 0.08)),
                 style: StrokeStyle(lineWidth: isActive ? 1.2 : 1, dash: isActive ? [3, 6] : [4, 8])
+            )
+        }
+    }
+
+    private func drawZigbeeChannels(into context: inout GraphicsContext, size: CGSize) {
+        guard !zigbeeChannels.isEmpty else { return }
+
+        let insetRect = CGRect(origin: .zero, size: size).insetBy(dx: 18, dy: 20)
+        let markerTop = insetRect.minY + 54
+        let markerHeight = max(insetRect.height - 96, 28)
+
+        for channel in zigbeeChannels {
+            let centerX = insetRect.minX + channel.centerFraction * insetRect.width
+            let markerWidth = max(insetRect.width * channel.widthFraction, 8)
+            let rect = CGRect(
+                x: centerX - markerWidth / 2,
+                y: markerTop,
+                width: markerWidth,
+                height: markerHeight
+            )
+            let path = Path(roundedRect: rect, cornerRadius: markerWidth / 2)
+
+            context.fill(
+                path,
+                with: .linearGradient(
+                    Gradient(colors: [
+                        Color(red: 0.12, green: 0.68, blue: 0.62).opacity(0.14),
+                        Color(red: 0.2, green: 0.9, blue: 0.86).opacity(0.28),
+                        Color(red: 0.44, green: 0.82, blue: 1.0).opacity(0.1),
+                    ]),
+                    startPoint: CGPoint(x: rect.midX, y: rect.minY),
+                    endPoint: CGPoint(x: rect.midX, y: rect.maxY)
+                )
+            )
+
+            context.stroke(
+                path,
+                with: .color(Color(red: 0.54, green: 0.98, blue: 0.96).opacity(0.76)),
+                style: StrokeStyle(lineWidth: 1.2, dash: [2.5, 3.5])
+            )
+
+            var centerLine = Path()
+            centerLine.move(to: CGPoint(x: centerX, y: rect.minY + 4))
+            centerLine.addLine(to: CGPoint(x: centerX, y: rect.maxY - 4))
+            context.stroke(
+                centerLine,
+                with: .color(Color.white.opacity(0.18)),
+                lineWidth: 1
             )
         }
     }
@@ -212,6 +267,21 @@ private struct BandLaneView: View {
                 .onTapGesture {
                     store.selectSignal(signal.bssid)
                 }
+        }
+    }
+
+    private func zigbeeLabels(size: CGSize) -> some View {
+        let insetRect = CGRect(origin: .zero, size: size).insetBy(dx: 18, dy: 20)
+
+        return ForEach(zigbeeChannels) { channel in
+            let xPosition = insetRect.minX + channel.centerFraction * insetRect.width
+
+            ZigbeeChannelGuideLabel(label: channel.shortLabel)
+                .position(
+                    x: min(max(xPosition, insetRect.minX + 26), insetRect.maxX - 26),
+                    y: insetRect.minY + 34
+                )
+                .allowsHitTesting(false)
         }
     }
 
@@ -363,6 +433,26 @@ private struct ChannelGuideLabel: View {
                     )
             )
             .rotationEffect(.degrees(-90))
+    }
+}
+
+private struct ZigbeeChannelGuideLabel: View {
+    let label: String
+
+    var body: some View {
+        Text(label)
+            .font(.system(size: 10, weight: .bold, design: .rounded))
+            .foregroundStyle(Color(red: 0.84, green: 1.0, blue: 0.98))
+            .padding(.horizontal, 7)
+            .padding(.vertical, 4)
+            .background(
+                Capsule(style: .continuous)
+                    .fill(Color(red: 0.05, green: 0.14, blue: 0.15).opacity(0.92))
+            )
+            .overlay(
+                Capsule(style: .continuous)
+                    .stroke(Color(red: 0.4, green: 0.94, blue: 0.9).opacity(0.72), style: StrokeStyle(lineWidth: 1, dash: [3, 2]))
+            )
     }
 }
 

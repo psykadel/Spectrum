@@ -13,9 +13,9 @@ final class SpectrumMathTests: XCTestCase {
         XCTAssertGreaterThan(width80, width20)
     }
 
-    func testTwoPointFourChannelSixCentersInLane() {
+    func testTwoPointFourChannelSixUsesRealFrequencyPlacement() {
         let center = SpectrumMath.normalizedCenter(channel: 6, band: .band2_4)
-        XCTAssertEqual(center, 0.5, accuracy: 0.0001)
+        XCTAssertEqual(center, 35.0 / 78.0, accuracy: 0.0001)
     }
 
     func testBandsExposeMajorChannelsForGuideLabels() {
@@ -26,7 +26,7 @@ final class SpectrumMathTests: XCTestCase {
 
     func testTwoPointFourWidthUsesRealOccupiedBandwidth() {
         let width = SpectrumMath.normalizedWidth(channelWidthMHz: 20, band: .band2_4)
-        XCTAssertEqual(width, 22.0 / 70.0, accuracy: 0.0001)
+        XCTAssertEqual(width, 22.0 / 78.0, accuracy: 0.0001)
     }
 
     func testTwoPointFourTwentyMegahertzAppearsWiderThanFiveGigahertz() {
@@ -43,5 +43,25 @@ final class SpectrumMathTests: XCTestCase {
     func testGhostAmplitudeClampsAboveVisibleFloor() {
         let amplitude = SpectrumMath.ghostAmplitude(liveAmplitude: 0.3, elapsed: 120)
         XCTAssertGreaterThanOrEqual(amplitude, 0.24)
+    }
+
+    func testZigbeeChannelsParseAndDeduplicate() {
+        let result = SpectrumMath.parseZigbeeChannels(from: "11, 15 15 20 foo 27")
+
+        XCTAssertEqual(result.channels, [11, 15, 20])
+        XCTAssertEqual(result.invalidTokens, ["foo", "27"])
+    }
+
+    func testZigbeeChannelTwentySixStaysWithinTwoPointFourLane() throws {
+        let frequency = try XCTUnwrap(SpectrumMath.zigbeeCenterFrequencyMHz(channel: 26))
+        let position = SpectrumMath.normalizedCenter(frequencyMHz: frequency, band: .band2_4)
+
+        XCTAssertEqual(position, 1, accuracy: 0.0001)
+    }
+
+    func testZigbeeRenderedWidthUsesActualTwoMegahertzOccupancy() {
+        let width = SpectrumMath.normalizedWidth(occupiedWidthMHz: 2, band: .band2_4)
+
+        XCTAssertEqual(width, 2.0 / 78.0, accuracy: 0.0001)
     }
 }

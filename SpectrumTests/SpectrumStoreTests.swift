@@ -183,6 +183,58 @@ final class SpectrumStoreTests: XCTestCase {
         XCTAssertEqual(peak.amplitude, 0.92, accuracy: 0.03)
     }
 
+    func testManualZigbeeChannelsPersistAsRenderedOverlapMarkers() {
+        let defaults = UserDefaults(suiteName: #function)!
+        let store = SpectrumStore(
+            scanner: MockWiFiScanner(),
+            locationStore: MockLocationAuthorizationStore(initialState: .authorized),
+            annotationRepository: InMemoryAnnotationRepository(),
+            defaults: defaults,
+            now: Date.init
+        )
+
+        store.addManualZigbeeChannels([25, 15, 15, 11])
+
+        XCTAssertEqual(store.manualZigbeeChannels.map(\.channel), [11, 15, 25])
+        XCTAssertEqual(store.renderedZigbeeChannels.map(\.channel), [11, 15, 25])
+
+        let reloaded = SpectrumStore(
+            scanner: MockWiFiScanner(),
+            locationStore: MockLocationAuthorizationStore(initialState: .authorized),
+            annotationRepository: InMemoryAnnotationRepository(),
+            defaults: defaults,
+            now: Date.init
+        )
+
+        XCTAssertEqual(reloaded.manualZigbeeChannels.map(\.channel), [11, 15, 25])
+    }
+
+    func testRemovingManualZigbeeChannelUpdatesPersistedState() {
+        let defaults = UserDefaults(suiteName: #function)!
+        let store = SpectrumStore(
+            scanner: MockWiFiScanner(),
+            locationStore: MockLocationAuthorizationStore(initialState: .authorized),
+            annotationRepository: InMemoryAnnotationRepository(),
+            defaults: defaults,
+            now: Date.init
+        )
+
+        store.addManualZigbeeChannels([11, 20, 25])
+        store.removeManualZigbeeChannel(20)
+
+        XCTAssertEqual(store.manualZigbeeChannels.map(\.channel), [11, 25])
+
+        let reloaded = SpectrumStore(
+            scanner: MockWiFiScanner(),
+            locationStore: MockLocationAuthorizationStore(initialState: .authorized),
+            annotationRepository: InMemoryAnnotationRepository(),
+            defaults: defaults,
+            now: Date.init
+        )
+
+        XCTAssertEqual(reloaded.manualZigbeeChannels.map(\.channel), [11, 25])
+    }
+
     func testNotDeterminedLocationActionRequestsAuthorization() {
         let scanner = MockWiFiScanner()
         let location = MockLocationAuthorizationStore(initialState: .notDetermined)
